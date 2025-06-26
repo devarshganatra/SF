@@ -1,0 +1,6 @@
+flask
+gunicorn
+matplotlib
+pandas
+flask_cors
+plotly
