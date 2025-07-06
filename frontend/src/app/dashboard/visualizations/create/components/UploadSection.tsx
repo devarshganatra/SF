@@ -9,6 +9,8 @@ interface UploadSectionProps {
   csvData: any[];
   csvColumns: string[];
   fileInputRef: React.RefObject<HTMLInputElement | null>;
+  fileType: 'csv' | 'image' | null;
+  imageUrl: string | null;
 }
 
 export function UploadSection({ 
@@ -16,33 +18,41 @@ export function UploadSection({
   isUploading, 
   csvData, 
   csvColumns,
-  fileInputRef 
+  fileInputRef,
+  fileType,
+  imageUrl
 }: UploadSectionProps) {
   return (
     <Card>
       <CardHeader>
         <CardTitle>Upload Dataset</CardTitle>
-        <CardDescription>Select a CSV file to visualize your data</CardDescription>
+        <CardDescription>Select a CSV or image file</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
           <div>
-            <Label htmlFor="csv-file">CSV File</Label>
+            <Label htmlFor="csv-file">CSV or Image File</Label>
             <Input
               id="csv-file"
               type="file"
-              accept=".csv"
+              accept=".csv,image/*"
               onChange={handleFileUpload}
               disabled={isUploading}
               ref={fileInputRef}
               className="mt-1"
             />
           </div>
-          {isUploading && <p className="text-sm text-muted-foreground">Uploading and parsing CSV...</p>}
-          {csvData.length > 0 && (
+          {isUploading && <p className="text-sm text-muted-foreground">Uploading and parsing file...</p>}
+          {fileType === 'csv' && csvData.length > 0 && (
             <p className="text-sm text-green-600">
               ✓ Successfully loaded {csvData.length} rows with columns: {csvColumns.join(', ')}
             </p>
+          )}
+          {fileType === 'image' && imageUrl && (
+            <div className="flex flex-col items-start gap-2">
+              <span className="text-sm text-green-600">✓ Image uploaded</span>
+              <img src={imageUrl} alt="Uploaded preview" className="max-w-xs max-h-48 border rounded" />
+            </div>
           )}
         </div>
       </CardContent>

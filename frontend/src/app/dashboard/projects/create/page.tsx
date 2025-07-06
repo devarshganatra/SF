@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +11,14 @@ import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Plus, X, Save, FolderPlus } from "lucide-react";
 import Link from 'next/link';
 import { CreateProjectRequest } from "@/types/project";
+
+function ClientDate() {
+  const [date, setDate] = useState('');
+  useEffect(() => {
+    setDate(new Date().toLocaleDateString());
+  }, []);
+  return <span>{date}</span>;
+}
 
 export default function CreateProjectPage() {
   const router = useRouter();
@@ -223,7 +231,7 @@ export default function CreateProjectPage() {
               <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
                 <h3 className="font-medium mb-2">Project Information</h3>
                 <div className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
-                  <p><strong>Created:</strong> {new Date().toLocaleDateString()}</p>
+                  <p><strong>Created:</strong> <ClientDate /></p>
                   <p><strong>Status:</strong> Active</p>
                   <p><strong>Visualizations:</strong> 0 (can be added after creation)</p>
                 </div>

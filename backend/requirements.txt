@@ -1,6 +1,5 @@
-flask
-gunicorn
+fastapi
+uvicorn
 matplotlib
 pandas
-flask_cors
 plotly

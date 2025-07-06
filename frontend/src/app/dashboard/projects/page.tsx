@@ -4,21 +4,48 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Search, Filter, Calendar, FolderOpen, MoreVertical } from "lucide-react";
-import { Project, ProjectFilters } from "@/types/project";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Plus, Search, Filter, List, Grid, Calendar, MoreVertical, FolderOpen, RefreshCw, AlertCircle } from "lucide-react";
+
+interface Project {
+  id: string;
+  name: string;
+  description: string;
+  status: 'active' | 'completed' | 'archived';
+  createdDate: string;
+  lastModified: string;
+  tags: string[];
+  previewImage?: string;
+  visualizations: Array<{
+    id: string;
+    title: string;
+    type: string;
+    createdDate: string;
+    dataFile?: string;
+    config: any;
+  }>;
+}
+
+interface ProjectFilters {
+  search: string;
+  status: string;
+  sortBy: string;
+  sortOrder: string;
+}
 
 export default function ProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
-  const [filters, setFilters] = useState<ProjectFilters>({
-    status: 'all',
-    search: '',
-    sortBy: 'modified',
-    sortOrder: 'desc'
-  });
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [filters, setFilters] = useState<ProjectFilters>({
+    search: "",
+    status: "all",
+    sortBy: "lastModified",
+    sortOrder: "desc",
+  });
 
   const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5000';
 
@@ -29,15 +56,15 @@ export default function ProjectsPage() {
   const fetchProjects = async () => {
     try {
       setLoading(true);
-      const params = new URLSearchParams();
-      if (filters.status && filters.status !== 'all') params.append('status', filters.status);
-      if (filters.search) params.append('search', filters.search);
-      if (filters.sortBy) params.append('sortBy', filters.sortBy);
-      if (filters.sortOrder) params.append('sortOrder', filters.sortOrder);
-      const response = await fetch(`${backendUrl}/api/projects?${params.toString()}`);
-      if (!response.ok) throw new Error('Failed to fetch projects');
+      const response = await fetch(`${backendUrl}/api/projects`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('API Error:', errorText);
+        throw new Error(`Failed to fetch projects: ${response.status} ${response.statusText}`);
+      }
       const data = await response.json();
-      setProjects(data);
+      console.log('Fetched projects:', data); // Debug log
+      setProjects(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Failed to fetch projects:', error);
     } finally {
@@ -54,24 +81,66 @@ export default function ProjectsPage() {
     }
   };
 
-  return (
-    <div className="min-h-screen p-8">
-      <header className="mb-8">
-        <div className="flex justify-between items-center">
+  if (loading) {
+    return (
+      <div className="container mx-auto p-6">
+        <div className="flex justify-between items-center mb-8">
           <div>
             <h1 className="text-3xl font-bold">Projects</h1>
-            <p className="text-gray-600 dark:text-gray-400 mt-2">
-              Manage and organize your scientific research projects
-            </p>
+            <p className="text-muted-foreground">Loading your projects...</p>
           </div>
-          <Link href="/dashboard/projects/create">
-            <Button className="flex items-center gap-2">
-              <Plus className="h-4 w-4" />
-              New Project
-            </Button>
-          </Link>
+          <Button disabled>
+            <Plus className="mr-2 h-4 w-4" /> New Project
+          </Button>
         </div>
-      </header>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[1, 2, 3].map((i) => (
+            <ProjectCard key={i} project={null} />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="container mx-auto p-6">
+        <div className="text-center py-12">
+          <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4" role="alert">
+            <div className="flex items-center">
+              <AlertCircle className="h-6 w-6 mr-2" />
+              <p className="font-bold">Error loading projects</p>
+            </div>
+            <p className="py-2">{error}</p>
+            <Button 
+              variant="outline" 
+              className="mt-2"
+              onClick={() => window.location.reload()}
+            >
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Try Again
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="container mx-auto p-6">
+      <div className="flex justify-between items-center mb-8">
+        <div>
+          <h1 className="text-3xl font-bold">Projects</h1>
+          <p className="text-muted-foreground">
+            {projects.length} project{projects.length !== 1 ? 's' : ''} found
+          </p>
+        </div>
+        <Button asChild>
+          <Link href="/dashboard/projects/create">
+            <Plus className="mr-2 h-4 w-4" /> New Project
+          </Link>
+        </Button>
+      </div>
 
       {/* Filters and Search */}
       <div className="mb-8">
@@ -142,7 +211,28 @@ export default function ProjectsPage() {
   );
 }
 
-function ProjectCard({ project }: { project: Project }) {
+function ProjectCard({ project }: { project: Project | null }) {
+  if (!project) {
+    return (
+      <Card className="hover:shadow-lg transition-shadow">
+        <div className="aspect-video bg-gray-100 dark:bg-gray-700 rounded-t-lg animate-pulse" />
+        <CardHeader>
+          <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded w-3/4 mb-2"></div>
+          <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-full"></div>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2">
+            <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded"></div>
+            <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-5/6"></div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Clean the project ID to remove any trailing colon and number
+  const cleanProjectId = project.id ? project.id.split(':')[0] : '';
+  
   return (
     <Card className="hover:shadow-lg transition-shadow cursor-pointer">
       <div className="aspect-video bg-gray-100 dark:bg-gray-700 rounded-t-lg overflow-hidden">
@@ -172,27 +262,36 @@ function ProjectCard({ project }: { project: Project }) {
       
       <CardContent>
         <div className="flex flex-wrap gap-1 mb-3">
-          {project.tags.slice(0, 3).map((tag) => (
+          {(project.tags || []).slice(0, 3).map((tag) => (
             <Badge key={tag} variant="secondary" className="text-xs">
               {tag}
             </Badge>
           ))}
-          {project.tags.length > 3 && (
+          {(project.tags || []).length > 3 && (
             <Badge variant="secondary" className="text-xs">
-              +{project.tags.length - 3}
+              +{(project.tags || []).length - 3}
             </Badge>
           )}
         </div>
         
-        <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
-          <Calendar className="h-3 w-3 mr-1" />
-          Modified {new Date(project.lastModified).toLocaleDateString()}
+        <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400">
+          <div className="flex items-center">
+            <Calendar className="h-3 w-3 mr-1" />
+            {new Date(project.lastModified).toLocaleDateString()}
+          </div>
+          <div className="flex items-center">
+            {(project.visualizations || []).length > 0 && (
+              <span className="text-xs bg-gray-100 dark:bg-gray-700 rounded-full px-2 py-0.5">
+                {(project.visualizations || []).length} viz
+              </span>
+            )}
+          </div>
         </div>
       </CardContent>
       
       <CardFooter className="flex justify-between">
         <Button variant="outline" size="sm" asChild>
-          <Link href={`/dashboard/projects/${project.id}`}>
+          <Link href={`/dashboard/projects/${cleanProjectId}`}>
             Open Project
           </Link>
         </Button>

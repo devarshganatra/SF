@@ -24,28 +24,70 @@ import { Project, Visualization } from "@/types/project";
 export default function ProjectDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const projectId = params.id as string;
+  const rawProjectId = params.id as string;
+  // Clean the project ID to remove any trailing colon and number
+  const projectId = rawProjectId ? rawProjectId.split(':')[0] : '';
+  
+  console.log('Raw project ID from URL:', rawProjectId);
+  console.log('Cleaned project ID:', projectId);
   
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [visualizations, setVisualizations] = useState<Visualization[]>([]);
 
-  const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5000';
+  const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
 
   useEffect(() => {
     fetchProject();
   }, [projectId]);
 
   const fetchProject = async () => {
+    if (!projectId) {
+      setError('Project ID is missing');
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
-      const response = await fetch(`${backendUrl}/api/projects/${projectId}`);
-      if (!response.ok) throw new Error('Failed to fetch project');
-      const data = await response.json();
-      setProject(data);
+      setError(null);
+      
+      console.log('Fetching all projects from:', `${backendUrl}/api/projects`);
+      const response = await fetch(`${backendUrl}/api/projects`);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Failed to fetch projects:', response.status, errorText);
+        throw new Error(`Failed to fetch projects: ${response.status} ${errorText}`);
+      }
+      
+      const projects = await response.json();
+      console.log('Received projects:', projects);
+      
+      // Find the project with the matching ID
+      const foundProject = projects.find((p: Project) => p.id === projectId);
+      
+      if (!foundProject) {
+        console.error('Project not found in the list. Looking for ID:', projectId);
+        console.log('Available project IDs:', projects.map((p: Project) => p.id));
+        throw new Error(`Project with ID ${projectId} not found`);
+      }
+      
+      console.log('Found project:', foundProject);
+      // Fetch visualizations list for the project
+      const vizRes = await fetch(`${backendUrl}/api/projects/${projectId}/visualizations`);
+      let vizList: Visualization[] = [];
+      if (vizRes.ok) {
+        vizList = await vizRes.json();
+      }
+      foundProject.visualizations = vizList;
+      setVisualizations(vizList);
+      setProject(foundProject);
     } catch (err) {
-      setError('Failed to load project');
-      console.error('Error fetching project:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+      console.error('Error in fetchProject:', errorMessage, err);
+      setError(`Failed to load project: ${errorMessage}`);
     } finally {
       setLoading(false);
     }
@@ -127,13 +169,15 @@ export default function ProjectDetailPage() {
             </p>
             
             {/* Tags */}
-            <div className="flex flex-wrap gap-2 mb-4">
-              {project.tags.map((tag) => (
-                <Badge key={tag} variant="secondary">
-                  {tag}
-                </Badge>
-              ))}
-            </div>
+            {(project.tags || []).length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-4">
+                {(project.tags || []).map((tag) => (
+                  <Badge key={tag} variant="secondary">
+                    {tag}
+                  </Badge>
+                ))}
+              </div>
+            )}
             
             {/* Project Meta */}
             <div className="flex items-center gap-6 text-sm text-gray-500 dark:text-gray-400">
@@ -146,7 +190,7 @@ export default function ProjectDetailPage() {
                 Modified {new Date(project.lastModified).toLocaleDateString()}
               </div>
               <div>
-                {project.visualizations.length} visualization{project.visualizations.length !== 1 ? 's' : ''}
+                {(project.visualizations || []).length} visualization{(project.visualizations || []).length !== 1 ? 's' : ''}
               </div>
             </div>
           </div>
@@ -190,7 +234,7 @@ export default function ProjectDetailPage() {
               </div>
             </CardHeader>
             <CardContent>
-              {project.visualizations.length === 0 ? (
+              {visualizations.length === 0 ? (
                 <div className="text-center py-8">
                   <BarChart3 className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                   <h3 className="font-medium mb-2">No visualizations yet</h3>
@@ -204,49 +248,13 @@ export default function ProjectDetailPage() {
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {project.visualizations.map((viz) => (
-                    <VisualizationCard key={viz.id} visualization={viz} />
+                  {visualizations.map((viz) => (
+                    <Link key={viz.id} href={`/dashboard/projects/${projectId}/visualizations/${viz.id}`} className="block">
+                      <VisualizationCard visualization={viz} projectId={projectId} />
+                    </Link>
                   ))}
                 </div>
               )}
-            </CardContent>
-          </Card>
-
-          {/* Recent Activity */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Recent Activity</CardTitle>
-              <CardDescription>
-                Latest changes and updates to this project
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <ActivityItem 
-                  action="Created visualization"
-                  item="pH Distribution Analysis"
-                  date="2025-01-19"
-                  icon="📊"
-                />
-                <ActivityItem 
-                  action="Updated visualization"
-                  item="Temperature vs Stability"
-                  date="2025-01-18"
-                  icon="📈"
-                />
-                <ActivityItem 
-                  action="Added visualization"
-                  item="Protein Structure Comparison"
-                  date="2025-01-16"
-                  icon="📊"
-                />
-                <ActivityItem 
-                  action="Created project"
-                  item="Protein Analysis Study"
-                  date="2025-01-15"
-                  icon="📁"
-                />
-              </div>
             </CardContent>
           </Card>
         </div>
@@ -276,10 +284,12 @@ export default function ProjectDetailPage() {
               <CardTitle>Quick Actions</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
-              <Button variant="outline" className="w-full justify-start">
-                <Plus className="h-4 w-4 mr-2" />
-                Add Visualization
-              </Button>
+              <Link href={`/dashboard/projects/${projectId}/visualizations/create`} passHref legacyBehavior>
+                <Button as="a" variant="outline" className="w-full justify-start">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Visualization
+                </Button>
+              </Link>
               <Button variant="outline" className="w-full justify-start">
                 <FileText className="h-4 w-4 mr-2" />
                 Generate Report
@@ -304,7 +314,7 @@ export default function ProjectDetailPage() {
             <CardContent className="space-y-3">
               <div className="flex justify-between">
                 <span className="text-gray-600">Visualizations</span>
-                <span className="font-medium">{project.visualizations.length}</span>
+                <span className="font-medium">{visualizations.length}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-600">Data Files</span>
@@ -328,7 +338,7 @@ export default function ProjectDetailPage() {
   );
 }
 
-function VisualizationCard({ visualization }: { visualization: Visualization }) {
+function VisualizationCard({ visualization, projectId }: { visualization: Visualization; projectId: string }) {
   return (
     <Card className="hover:shadow-md transition-shadow">
       <CardContent className="p-4">
@@ -343,33 +353,12 @@ function VisualizationCard({ visualization }: { visualization: Visualization }) 
               {new Date(visualization.createdDate).toLocaleDateString()}
             </p>
           </div>
-          <Button variant="ghost" size="sm">
-            <MoreVertical className="h-4 w-4" />
-          </Button>
         </div>
       </CardContent>
     </Card>
   );
 }
 
-function ActivityItem({ action, item, date, icon }: { 
-  action: string; 
-  item: string; 
-  date: string; 
-  icon: string; 
-}) {
-  return (
-    <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-      <div className="text-lg">{icon}</div>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm">
-          <span className="font-medium">{action}</span> "{item}"
-        </p>
-        <p className="text-xs text-gray-500">{new Date(date).toLocaleDateString()}</p>
-      </div>
-    </div>
-  );
-}
 
 function getVisualizationIcon(type: string): string {
   switch (type) {

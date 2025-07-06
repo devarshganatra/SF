@@ -17,12 +17,21 @@ export function useBackendPlot() {
     try {
       const formData = new FormData();
       formData.append("file", csvFile);
-      formData.append("title", config.title);
-      formData.append("xlabel", config.xAxisLabel);
-      formData.append("ylabel", config.yAxisLabel);
+      formData.append("mode", "static");
+      formData.append("config", JSON.stringify({
+        title: config.title,
+        x_label: config.xAxisLabel,
+        y_label: config.yAxisLabel,
+        plot_type: 'line',
+        plot_properties: {
+          x_column_names: config.xAxisAttributes || [],
+          y_column_names: config.yAxisAttributes || [],
+          color: config.yAxisColors || {}
+        }
+      }));
       
-      const backendUrl = process.env.BACKEND_URL;
-      const response = await fetch(`${backendUrl}/rmsd-plot`, {
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
+      const response = await fetch(`${backendUrl}/generate-plot`, {
         method: "POST",
         body: formData,
       });
